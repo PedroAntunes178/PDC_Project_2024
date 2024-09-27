@@ -1,3 +1,9 @@
 [submodule "libONNX/libonnx"]
 	path = libONNX/libonnx
 	url = https://github.com/xboot/libonnx.git
+[submodule "ONNX2C/onnx2c"]
+	path = ONNX2C/onnx2c
+	url = https://github.com/kraiskil/onnx2c.git
+[submodule "cONNXr/cONNXr"]
+	path = cONNXr/cONNXr
+	url = https://github.com/alrevuelta/cONNXr.git

@@ -1,0 +1,110 @@
+diff --git a/Makefile b/Makefile
+index 60771f8..0d77139 100644
+--- a/Makefile
++++ b/Makefile
+@@ -59,7 +59,7 @@ VARIABLE+=ONNX_EXCLUDE
+ HELP_ONNX_EXCLUDE=which schemas to exclude
+ ONNX_EXCLUDE=
+ 
+-CC=gcc
++CC?=gcc
+ CFLAGS+=-std=c99
+ CFLAGS+=-Wall
+ CFLAGS+=-g3 -gdwarf -O2
+@@ -68,10 +68,14 @@ ifdef TRACE_LEVEL
+ CPPFLAGS+=-D "TRACE_LEVEL=$(TRACE_LEVEL)"
+ endif
+ 
++CFLAGS+=-fopenmp
++
+ LDFLAGS+=-g
++LDFLAGS+=-L/cfs/klemming/home/p/pedroa/.localCUnit/lib
+ LDLIBS+=-lcunit
+ LDLIBS+=-lm
+ 
++INCDIR+=/cfs/klemming/home/p/pedroa/.localCUnit/include/
+ INCDIR+=include
+ INCDIR+=protobuf
+ CPPFLAGS+=$(foreach DIR, $(INCDIR),-I $(DIR) )
+diff --git a/run_dardel.sh b/run_dardel.sh
+new file mode 100644
+index 0000000..ae07c96
+--- /dev/null
++++ b/run_dardel.sh
+@@ -0,0 +1,27 @@
++#!/bin/bash -l
++# The -l above is required to get the full environment with modules
++
++# Set the allocation to be charged for this job
++# not required if you have set a default allocation
++#SBATCH -A edu24.summer
++
++# The name of the script is myjob
++#SBATCH -J cONNX_inference
++
++# The partition
++#SBATCH -p main
++
++# Number of tasks
++#SBATCH -n 1
++
++# Number of cpus per task
++#SBATCH -c 16
++
++# 10 hours wall-clock time will be given to this job
++#SBATCH -t 00:10:00
++
++export OMP_NUM_THREADS=8
++
++# Run the executable named myexe
++# and write the output into my_output_file
++srun build/connxr test/mobilenetv2-1.0/mobilenetv2-1.0.onnx test/mobilenetv2-1.0/test_data_set_0/input_0.pb
+diff --git a/src/operators/ai.onnx/Conv/11/execute_operator__ai_onnx__conv__11__T_tensor_float.c b/src/operators/ai.onnx/Conv/11/execute_operator__ai_onnx__conv__11__T_tensor_float.c
+index 53fc9c7..a2332cd 100644
+--- a/src/operators/ai.onnx/Conv/11/execute_operator__ai_onnx__conv__11__T_tensor_float.c
++++ b/src/operators/ai.onnx/Conv/11/execute_operator__ai_onnx__conv__11__T_tensor_float.c
+@@ -3,6 +3,8 @@
+ #include "tracing.h"
+ #include "utils.h"
+ #include "index.h"
++#include <omp.h>
++//#include <stdio.h>
+ 
+ operator_status
+ execute_operator__ai_onnx__conv__11__T_tensor_float(
+@@ -77,12 +79,17 @@ execute_operator__ai_onnx__conv__11__T_tensor_float(
+     int64_t h_pad    = pads_begin[0];
+     int64_t w_pad    = pads_begin[1];
+     int b, i, j, k, m, n, d;
++
++    //printf("%ld, %ld, %ld, %ld\n", o_Y->dims[0], o_Y->dims[1], o_Y->dims[2], o_Y->dims[3]);
++    #pragma omp parallel for collapse(4) private(n, m, b, k, i, j) firstprivate(h_kernel, w_kernel)
+     for(b = 0; b < o_Y->dims[0]; ++b){
+       for(k = 0; k < o_Y->dims[1]; ++k){
+-        int g = (k/(o_Y->dims[1]/group));
+-        TRACE_BOUND_FATAL(3, true, g, 0, (int)group, "%d");
++	//int g = (k/(o_Y->dims[1]/group));
++        //TRACE_BOUND_FATAL(3, true, g, 0, (int)group, "%d");
++	//#pragma omp parallel for collapse(2) private(n, m, b, k, i, j) firstprivate(h_kernel, w_kernel, g)
+         for(i = 0; i < o_Y->dims[2]; ++i){
+           for(j = 0; j < o_Y->dims[3]; ++j){
++            int g = (k/(o_Y->dims[1]/group));
+             // TODO replace all this calculations by macros?
+             uint64_t out_index = j + o_Y->dims[3]*(i + o_Y->dims[2]*(k + o_Y->dims[1]*b));
+             float value = 0;
+@@ -107,7 +114,7 @@ execute_operator__ai_onnx__conv__11__T_tensor_float(
+                     float val = (valid != 0) ? i_X->float_data[index] : 0;
+                     int index_kernel = k*i_W->dims[3]*i_W->dims[2]*i_W->dims[1] + d*i_W->dims[3]*i_W->dims[2] + n*h_kernel + m; // change h_kernel by i_W->dims[x]
+                     value += val * i_W->float_data[index_kernel];
+-                    //TRACE_LEVEL0("%fx%f+\n", val, i_W->float_data[index_kernel]);
++		    //TRACE_LEVEL0("%fx%f+\n", val, i_W->float_data[index_kernel]);
+                   }
+                 }
+               }
+@@ -227,4 +234,4 @@ execute_operator__ai_onnx__conv__11__T_tensor_float(
+     /* CHANGE RETURN CODE IF THIS EXECUTER IS VALID */
+     // return OP_ENOSYS;
+     return OP_OK;
+-}
+\ No newline at end of file
++}
