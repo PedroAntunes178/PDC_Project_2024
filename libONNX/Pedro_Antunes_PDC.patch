@@ -1,0 +1,227 @@
+diff --git a/Makefile b/Makefile
+index 7b0baa7..d87f691 100644
+--- a/Makefile
++++ b/Makefile
+@@ -6,7 +6,7 @@
+ 
+ all:
+ 	@$(MAKE) -C src all
+-	@$(MAKE) -C examples all
++	#@$(MAKE) -C examples all
+ 	@$(MAKE) -C tests all
+ 
+ clean:
+diff --git a/mnist_test/Makefile b/mnist_test/Makefile
+new file mode 100644
+index 0000000..801b063
+--- /dev/null
++++ b/mnist_test/Makefile
+@@ -0,0 +1,37 @@
++#
++# Makefile for application
++#
++CC		?= cc # Does not compile with "cc", unable to find library -lpmi/2
++LD		:= ld
++RM		:= rm -fr
++
++CFLAGS		:= -g -ggdb -Wall -O3 -fopenmp
++LDFLAGS		:= -fopenmp
++
++LIBDIRS		:= -L ../src
++LIBS 		:= -lonnx -lm
++
++INCDIRS		:= -I . -I ../src
++SRCDIRS		:= .
++
++CFILES		:= $(foreach dir, $(SRCDIRS), $(wildcard $(dir)/*.c))
++OBJS		:= $(patsubst %, %, $(CFILES:.c=.o))
++
++OBJDIRS		:= $(patsubst %, %, $(SRCDIRS))
++NAME		:= main
++
++.PHONY: all clean
++
++all : clean $(NAME)
++
++$(NAME) : $(OBJS)
++	@echo [LD] Linking $@
++	@$(CC) $(LDFLAGS) $(LIBDIRS) $^ -o $@ $(LIBS)
++
++$(OBJS) : %.o : %.c
++	@echo [CC] $<
++	@$(CC) $(CFLAGS) $(INCDIRS) -c $< -o $@
++
++clean:
++	@$(RM) $(OBJS) $(NAME)
++
+diff --git a/mnist_test/main.c b/mnist_test/main.c
+new file mode 100644
+index 0000000..0dbbebc
+--- /dev/null
++++ b/mnist_test/main.c
+@@ -0,0 +1,44 @@
++#include <stdio.h>
++#include <stdlib.h>
++#include <onnx.h>
++#include <time.h>
++
++static void testcase(struct onnx_resolver_t ** r, int rlen)
++{
++	struct onnx_context_t * ctx;
++	struct onnx_tensor_t * t, * o;
++	
++	clock_t pre_inference;
++	clock_t pos_inference;
++
++	ctx = onnx_context_alloc_from_file("/cfs/klemming/home/p/pedroa/Private/Project/mnist-12/mnist-12.onnx", r, rlen);
++	if(ctx){
++		t = onnx_tensor_search(ctx, ctx->model->graph->input[0]->name);
++		o = onnx_tensor_alloc_from_file("/cfs/klemming/home/p/pedroa/Private/Project/mnist-12/test_data_set_0/input_0.pb");
++		onnx_tensor_apply(t, o->datas, o->ndata * onnx_tensor_type_sizeof(o->type));
++		onnx_tensor_free(o);
++
++		pre_inference = clock();
++		onnx_run(ctx);
++		pos_inference = clock();
++		double inference_time = (double)(pos_inference-pre_inference)/CLOCKS_PER_SEC;
++
++		t = onnx_tensor_search(ctx, ctx->model->graph->output[0]->name);
++		o = onnx_tensor_alloc_from_file("/cfs/klemming/home/p/pedroa/Private/Project/mnist-12/test_data_set_0/output_0.pb");
++		if(onnx_tensor_equal(t, o))
++			printf("Model inference time was: %.6lf\n", inference_time);
++		else
++			printf("Model inference failed.\n");
++		onnx_tensor_free(o);
++
++		onnx_context_free(ctx);
++	}
++	else{
++		printf("Failed to open model.\n");
++	}
++}
++
++int main(int argc, char * argv[]){
++	testcase(NULL, 0);
++	return 0;
++}
+diff --git a/src/Makefile b/src/Makefile
+index a8a516f..a482705 100644
+--- a/src/Makefile
++++ b/src/Makefile
+@@ -4,18 +4,18 @@
+ 
+ CROSS_COMPILE	?= 
+ 
+-AS			:= $(CROSS_COMPILE)gcc -x assembler-with-cpp
+-CC			:= $(CROSS_COMPILE)gcc
+-CXX			:= $(CROSS_COMPILE)g++
++AS			?= $(CROSS_COMPILE)cc -x assembler-with-cpp
++CC			?= $(CROSS_COMPILE)cc
++CXX			?= $(CROSS_COMPILE)CC
+ LD			:= $(CROSS_COMPILE)ld
+ AR			:= $(CROSS_COMPILE)ar
+ OC			:= $(CROSS_COMPILE)objcopy
+ OD			:= $(CROSS_COMPILE)objdump
+ RM			:= rm -fr
+ 
+-ASFLAGS		:= -g -ggdb -Wall -O3
+-CFLAGS		:= -g -ggdb -Wall -O3
+-CXXFLAGS	:= -g -ggdb -Wall -O3
++ASFLAGS		:= -g -ggdb -Wall -O3 -fopenmp
++CFLAGS		:= -g -ggdb -Wall -O3 -fopenmp
++CXXFLAGS	:= -g -ggdb -Wall -O3 -fopenmp
+ INCDIRS		:= -I .
+ SRCDIRS		:= . default
+ 
+diff --git a/src/default/Add.c b/src/default/Add.c
+index cc2d02d..e434b7d 100644
+--- a/src/default/Add.c
++++ b/src/default/Add.c
+@@ -1,4 +1,5 @@
+ #include <onnx.h>
++#include <omp.h>
+ 
+ static int Add_init(struct onnx_node_t * n)
+ {
+@@ -183,7 +184,9 @@ static void Add_float32(struct onnx_node_t * n)
+ 	float * pa;
+ 	float * pb;
+ 
+-	for(size_t i = 0, l = y->ndata; i < l; i++)
++	size_t l = y->ndata;
++//#pragma omp parallel for firstprivate(l)
++	for(size_t i = 0; i < l; i++)
+ 	{
+ 		pa = onnx_tensor_broadcast_map_address(a, y, i);
+ 		pb = onnx_tensor_broadcast_map_address(b, y, i);
+diff --git a/src/default/Conv.c b/src/default/Conv.c
+index f812c87..236110f 100644
+--- a/src/default/Conv.c
++++ b/src/default/Conv.c
+@@ -1,4 +1,7 @@
+ #include <onnx.h>
++#include <omp.h>
++#include <stdio.h>
++#include <time.h>
+ 
+ enum auto_pad_t {
+ 	AUTO_PAD_NOTSET		= 0,
+@@ -604,7 +607,6 @@ static void Conv_float32(struct onnx_node_t * n)
+ 		typedef float (*mwtype)/*[H * W * C]*/[MM];
+ 		typedef float (*mxtype)/*[oH * oW]*/[H * W * C];
+ 		typedef float (*mytype)/*[oH * oW]*/[MM];
+-
+ 		/* try im2col first */
+ 		matw = malloc(MM * H * W * C * sizeof(float));
+ 		matx = malloc(oH * oW * H * W * C * sizeof(float));
+@@ -709,7 +711,9 @@ static void Conv_float32(struct onnx_node_t * n)
+ 			}
+ 		}
+ 		else if (conv_mode == CONV_IM2COL)
+-		{			
++		{	
++			clock_t init;
++		        init = clock();
+ 			for (int g = 0; g < pdat->group; g++)
+ 			{
+ 				for (size_t m = 0; m < MM; m++)
+@@ -725,9 +729,11 @@ static void Conv_float32(struct onnx_node_t * n)
+ 						}					
+ 					}				
+ 				}
+-				
+ 				for (int n = 0; n < oN; n++)
+ 				{
++					printf("1->%ld\n", clock()-init);
++                                        init = clock();
++					#pragma omp parallel for collapse(2) firstprivate(oH, oW, C, H, W, iH, iW)
+ 					for (size_t hh = 0; hh < oH; hh++)
+ 					{
+ 						for (size_t ww = 0; ww < oW; ww++)
+@@ -756,6 +762,8 @@ static void Conv_float32(struct onnx_node_t * n)
+ 						}
+ 					}
+ 					dgemm_float32(oH * oW, MM, H * W * C, matx, matw, maty);
++                                	printf("2->%ld\n", clock()-init);
++                                	init = clock();					
+ 					for (int m = 0; m < MM; ++m)
+ 					{
+ 						for (int h = 0; h < oH; ++h)
+@@ -771,6 +779,8 @@ static void Conv_float32(struct onnx_node_t * n)
+ 							}
+ 						}
+ 					}
++				printf("3->%ld\n", clock()-init);
++                                init = clock();
+ 				}
+ 			}
+ 			free(matw);
+@@ -788,7 +798,7 @@ static void Conv_float32(struct onnx_node_t * n)
+ 		int o_dim[ndim];
+ 		int w_dim[ndim];
+ 		int b_dim[ndim];
+-
++printf("Here3.\n");
+ 		memset(o_dim, 0, sizeof(o_dim));
+ 		do {
+ 			b_dim[0] = o_dim[0];
