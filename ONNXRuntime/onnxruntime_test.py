@@ -38,7 +38,7 @@ result = (output==expected_output).all()
 if (not result):
     print("Inference output is not what was expected.")
     print(f"Expected output: {expected_output}")
-    print(f"Output is as expected: {output}")
+    print(f"Output: {output}")
 else:
     print(f"Output is as expected: {output}")
     print(f"Inference Time: {inference_time}")
