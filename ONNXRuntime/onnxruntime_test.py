@@ -26,7 +26,7 @@ with open(input_file, 'rb') as f:
 output_tensor = onnx.TensorProto()
 with open(f"{model_dir}/test_data_set_0/output_0.pb", 'rb') as f:
     output_tensor.ParseFromString(f.read())
-    output_data = numpy_helper.to_array(output_tensor))
+    output_data = numpy_helper.to_array(output_tensor)
 
 # Run inference
 pre_inference_time = time.time()
