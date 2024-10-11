@@ -34,7 +34,7 @@ output = session.run([], {input_name: input_data})[0]
 pos_inference_time = time.time()
 inference_time = pos_inference_time-pre_inference_time
 
-result = ((output < expected_output*1.2) & (output > expected_output*0.8))
+result = (int(output)==int(expected_output))
 print(result)
 print(result.all())
 if (not result.all()):
