@@ -26,18 +26,18 @@ with open(input_file, 'rb') as f:
 output_tensor = onnx.TensorProto()
 with open(f"{model_dir}/test_data_set_0/output_0.pb", 'rb') as f:
     output_tensor.ParseFromString(f.read())
-    output_data = numpy_helper.to_array(output_tensor)
+    expected_output = numpy_helper.to_array(output_tensor)
 
 # Run inference
 pre_inference_time = time.time()
-outputs = session.run([], {input_name: input_data})[0]
+output = session.run([], {input_name: input_data})[0]
 pos_inference_time = time.time()
 inference_time = pos_inference_time-pre_inference_time
 
-result = (narr1 == narr2).all()
+result = (expected_output == output).all()
 if (not result):
     print("Inference output is not what was expected.")
-    print(f"Expected output: {output_data}")
+    print(f"Expected output: {expected_output}")
 else:
-    print(f"Output is as expected: {outputs}")
+    print(f"Output is as expected: {output}")
     print(f"Inference Time: {inference_time}")
