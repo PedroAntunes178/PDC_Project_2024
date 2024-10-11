@@ -34,7 +34,8 @@ outputs = session.run([], {input_name: input_data})[0]
 pos_inference_time = time.time()
 inference_time = pos_inference_time-pre_inference_time
 
-if (outputs != output_data):
+result = (narr1 == narr2).all()
+if (not result):
     print("Inference output is not what was expected.")
     print(f"Expected output: {output_data}")
 else:
