@@ -8,7 +8,7 @@ import time
 from onnx import numpy_helper
 from google.protobuf import text_format
 
-model_dir = "/cfs/klemming/home/p/pedroa/Private/Project/mnist-12"
+model_dir = "./mnist-12"
 
 # Load the model and create InferenceSession
 providers=['CPUExecutionProvider']
