@@ -34,10 +34,8 @@ output = session.run([], {input_name: input_data})[0]
 pos_inference_time = time.time()
 inference_time = pos_inference_time-pre_inference_time
 
-result = (int(output)==int(expected_output))
-print(result)
-print(result.all())
-if (not result.all()):
+result = (output==expected_output).all()
+if (not result):
     print("Inference output is not what was expected.")
     print(f"Expected output: {expected_output}")
     print(f"Output is as expected: {output}")
